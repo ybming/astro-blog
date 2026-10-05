@@ -413,6 +413,11 @@ import "@pagefind/default-ui/css/ui.css";
     filter: blur(70px);
     will-change: transform;
     opacity: 0.6;
+    animation-play-state: paused;
+  }
+
+  .search-modal-overlay.active .modal-aurora-orb {
+    animation-play-state: running;
   }
 
   .modal-aurora-orb-1 {
@@ -522,6 +527,11 @@ import "@pagefind/default-ui/css/ui.css";
     box-shadow: 0 0 6px 1px color-mix(in srgb, var(--accent) 50%, transparent);
     opacity: 0;
     animation: sparkle-pulse 3s ease-in-out infinite;
+    animation-play-state: paused;
+  }
+
+  .search-modal-overlay.active .sparkle {
+    animation-play-state: running;
   }
 
   .sparkle-1 {
@@ -588,6 +598,11 @@ import "@pagefind/default-ui/css/ui.css";
     -webkit-mask-composite: xor;
     padding: 1px;
     animation: border-rotate 4s linear infinite;
+    animation-play-state: paused;
+  }
+
+  .search-modal-overlay.active .modal-border-glow {
+    animation-play-state: running;
   }
 
   @keyframes border-rotate {

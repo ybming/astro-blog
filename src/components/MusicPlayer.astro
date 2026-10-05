@@ -676,6 +676,7 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
         lrcLines: [],
         lrcTimer: null,
         urls: [],
+        playlistRendered: false, // dirty flag：避免 restoreUI 重复重建 DOM
       };
     }
     var S = w.__mpState;
@@ -834,7 +835,7 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
     async function fetchPlaylist() {
       if (S.playlist.length > 0) {
         // 已有数据，直接渲染 UI
-        renderPlaylist();
+        if (!S.playlistRendered) { renderPlaylist(); S.playlistRendered = true; }
         renderCurrentSong();
         return;
       }
@@ -853,6 +854,7 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
           if (Array.isArray(data) && data.length > 0) {
             S.playlist = data;
             renderPlaylist();
+            S.playlistRendered = true;
             loadSong(0, false);
             console.log("[MusicPlayer] Loaded " + S.playlist.length + " songs");
             return;
@@ -1048,7 +1050,27 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
     bindAudioEvents(); // 只绑一次
     bindUIEvents();    // 每次页面加载绑（有 guard 防重复）
 
-    // 恢复 UI 显示（页面切换后 DOM 重建，audio 状态在 window 上保留）
+    // 只恢复 UI，不发起网络请求 —— fetchPlaylist 延迟到首次点击播放
+    restoreUI();
+
+    // View Transition 后重新绑定 UI + 恢复显示
+    document.addEventListener("astro:page-load", function() {
+      bindUIEvents();
+      // DOM 已重建，重置 dirty flag 让 restoreUI 重建 playlist
+      S.playlistRendered = false;
+      restoreUI();
+    });
+
+    // 标签页隐藏时暂停歌词定时器，避免后台空转
+    document.addEventListener("visibilitychange", function() {
+      if (document.hidden) {
+        if (S.lrcTimer) { clearInterval(S.lrcTimer); S.lrcTimer = null; }
+      } else if (!audio.paused && audio.src && S.lrcLines.length > 0 && !S.lrcTimer) {
+        // 回到前台且正在播放，恢复定时器
+        fetchLyric(S.playlist[S.currentIndex]?.lrc);
+      }
+    });
+
     function restoreUI() {
       // 恢复播放/暂停图标
       var fp = document.getElementById("floating-player");
@@ -1060,9 +1082,9 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
         if (ipa) ipa.classList.toggle("mp-hidden", audio.paused);
       }
 
-      // 恢复歌曲信息
+      // 恢复歌曲信息（仅 DOM 重建时重建 playlist 列表）
       if (S.playlist.length > 0) {
-        renderPlaylist();
+        if (!S.playlistRendered) { renderPlaylist(); S.playlistRendered = true; }
         renderCurrentSong();
         // 重新启动歌词定时器
         if (!audio.paused && audio.src) {
@@ -1083,14 +1105,5 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
         try { audio.play().catch(function() {}); } catch(e) {}
       }
     }
-
-    // 首次加载
-    fetchPlaylist().then(restoreUI);
-
-    // View Transition 后重新绑定 UI + 恢复显示
-    document.addEventListener("astro:page-load", function() {
-      bindUIEvents();
-      restoreUI();
-    });
   })();
 </script>

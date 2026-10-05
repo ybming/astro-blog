@@ -90,7 +90,9 @@ export const SITE = {
 /** 从 SITE 配置生成导航菜单（自动处理 enabledKey 开关） */
 export function getNavMenu() {
   return SITE.navMenu.filter(item => {
-    if (!item.enabledKey) return true;
-    return (SITE as Record<string, unknown>)[item.enabledKey] === true;
+    // enabledKey 是可选字段，但 TypeScript 联合类型不识别
+    const key = (item as { enabledKey?: string }).enabledKey;
+    if (!key) return true;
+    return (SITE as Record<string, unknown>)[key] === true;
   });
 }
