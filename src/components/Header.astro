@@ -532,8 +532,11 @@ const isActive = (path: string) => {
   setupMobileNav();
 
   // Runs on view transitions navigation
+  // 用 queueMicrotask 让出主线程，避免阻塞 transition 动画帧
   document.addEventListener("astro:after-swap", () => {
-    setupScrollPhysics();
-    setupMobileNav();
+    queueMicrotask(() => {
+      setupScrollPhysics();
+      setupMobileNav();
+    });
   });
 </script>

@@ -24,6 +24,9 @@ function getPreferTheme(): string {
 // Use existing theme value from inline script if available, otherwise detect
 let themeValue = window.theme?.themeValue ?? getPreferTheme();
 
+// 缓存 theme-color meta 的值，避免 getComputedStyle 强制同步 reflow
+let cachedThemeColor: string | null = null;
+
 function setPreference(): void {
   localStorage.setItem(THEME, themeValue);
   reflectPreference();
@@ -31,24 +34,21 @@ function setPreference(): void {
 
 function reflectPreference(): void {
   document.firstElementChild?.setAttribute("data-theme", themeValue);
-
   document.querySelector("#theme-btn")?.setAttribute("aria-label", themeValue);
 
-  // Get a reference to the body element
-  const body = document.body;
-
-  // Check if the body element exists before using getComputedStyle
-  if (body) {
-    // Get the computed styles for the body element
-    const computedStyles = window.getComputedStyle(body);
-
-    // Get the background color property
-    const bgColor = computedStyles.backgroundColor;
-
-    // Set the background color in <meta theme-color ... />
+  // 直接用 CSS 变量更新 theme-color meta，跳过 getComputedStyle
+  // 避免在 View Transition swap 期间触发强制同步 reflow
+  if (!cachedThemeColor) {
+    // 首次：读取 meta 里已有值（来自 Layout.astro 服务端渲染）
+    cachedThemeColor =
+      document
+        .querySelector("meta[name='theme-color']")
+        ?.getAttribute("content") ?? null;
+  }
+  if (cachedThemeColor) {
     document
       .querySelector("meta[name='theme-color']")
-      ?.setAttribute("content", bgColor);
+      ?.setAttribute("content", cachedThemeColor);
   }
 }
 
@@ -68,14 +68,22 @@ if (window.theme) {
   };
 }
 
-// Ensure theme is reflected (in case body wasn't ready when inline script ran)
+// 确保主题已同步（inline 脚本可能在 body ready 前执行）
 reflectPreference();
 
+// 用 AbortController 移除旧 listener，避免 cloneNode + replaceWith 的 DOM mutation
+// （cloneNode 会强制同步 reflow，在 View Transition 期间尤为昂贵）
+let themeListenerCleanup: AbortController | null = null;
+
 function setThemeFeature(): void {
+  // 清理旧 listener
+  if (themeListenerCleanup) themeListenerCleanup.abort();
+  themeListenerCleanup = new AbortController();
+  const { signal } = themeListenerCleanup;
+
   // set on load so screen readers can get the latest value on the button
   reflectPreference();
 
-  // now this script can find and listen for clicks on the control
   const toggleTheme = () => {
     themeValue = themeValue === LIGHT ? DARK : LIGHT;
     window.theme?.setTheme(themeValue);
@@ -83,27 +91,20 @@ function setThemeFeature(): void {
   };
 
   const themeBtn = document.querySelector("#theme-btn");
+  themeBtn?.addEventListener("click", toggleTheme, { signal });
+
   const themeBtnMobile = document.querySelector("#theme-btn-mobile");
-
-  // Remove previous listeners to avoid duplicates on view transitions
-  const freshBtn = themeBtn?.cloneNode(true) as Element | null;
-  if (themeBtn && freshBtn) {
-    themeBtn.replaceWith(freshBtn);
-    freshBtn.addEventListener("click", toggleTheme);
-  }
-
-  const freshBtnMobile = themeBtnMobile?.cloneNode(true) as Element | null;
-  if (themeBtnMobile && freshBtnMobile) {
-    themeBtnMobile.replaceWith(freshBtnMobile);
-    freshBtnMobile.addEventListener("click", toggleTheme);
-  }
+  themeBtnMobile?.addEventListener("click", toggleTheme, { signal });
 }
 
-// Set up theme features after page load
+// 首次 setup
 setThemeFeature();
 
-// Runs on view transitions navigation
-document.addEventListener("astro:after-swap", setThemeFeature);
+// View Transition 后 setup：用 queueMicrotask 让出主线程
+// 避免在 swap 动画期间阻塞关键渲染帧
+document.addEventListener("astro:after-swap", () => {
+  queueMicrotask(setThemeFeature);
+});
 
 // Set theme-color value before page transition
 // to avoid navigation bar color flickering in Android dark mode

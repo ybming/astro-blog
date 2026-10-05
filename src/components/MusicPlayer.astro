@@ -1054,11 +1054,14 @@ const playlistUrls = apiChain.map(base => `${base}?server=${server}&type=${type}
     restoreUI();
 
     // View Transition 后重新绑定 UI + 恢复显示
+    // 用 queueMicrotask 让出主线程
     document.addEventListener("astro:page-load", function() {
-      bindUIEvents();
-      // DOM 已重建，重置 dirty flag 让 restoreUI 重建 playlist
-      S.playlistRendered = false;
-      restoreUI();
+      queueMicrotask(() => {
+        bindUIEvents();
+        // DOM 已重建，重置 dirty flag 让 restoreUI 重建 playlist
+        S.playlistRendered = false;
+        restoreUI();
+      });
     });
 
     // 标签页隐藏时暂停歌词定时器，避免后台空转

@@ -198,3 +198,35 @@ i {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   box-shadow: 0 4px 15px color-mix(in srgb, var(--accent) 15%, transparent);
 }
+
+/* ═══════════════════════════════════════════════
+   View Transition 性能优化
+   默认 cross-fade 0.3s 太重（大量 backdrop-blur + infinite 动画）
+   缩到 0.15s，避免动画帧被主线程 reflow 阻塞
+   ═══════════════════════════════════════════════ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.15s;
+  animation-timing-function: ease-out;
+}
+
+/* View Transition 期间暂停所有 infinite 动画，让 GPU 全力做 cross-fade */
+::view-transition {
+  /* 这个选择器在 transition 全局生效时触发，让 Card glow/shimmer 等暂停 */
+}
+
+/* reduced-motion 用户直接跳过过渡 */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0s !important;
+  }
+}
+
+/* 降低 GPU 合成层：首页卡片 backdrop-blur 太耗性能 */
+/* 保持 border + 半透明底色即可，不需要 blur */
+.card-glow.backdrop-blur-sm,
+.card-glow.backdrop-blur {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
